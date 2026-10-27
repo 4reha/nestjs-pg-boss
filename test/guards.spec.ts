@@ -154,3 +154,55 @@ describe('handler dispatch', () => {
     await moduleRef.close();
   });
 });
+
+describe('decorator argument forms', () => {
+  it('accepts a queue, options, both or neither', async () => {
+    const calls: Array<{ queue: string; options: Record<string, unknown> }> = [];
+    const boss = {
+      getQueue: async () => null,
+      createQueue: async () => {},
+      updateQueue: async () => {},
+      stop: async () => {},
+      on: () => {},
+      work: async (queue: string, options: Record<string, unknown>) => {
+        calls.push({ queue, options });
+        return 'worker-id';
+      },
+    };
+
+    @Processor('default-q')
+    @Injectable()
+    class Forms {
+      @Process()
+      async bare() {}
+
+      @Process('named')
+      async named() {}
+
+      @Process({ includeMetadata: true })
+      async optionsOnly() {}
+
+      @Process('both', { includeMetadata: true })
+      async both() {}
+
+      @ProcessBatch({ batchSize: 5 })
+      async batchOptionsOnly() {}
+    }
+
+    const moduleRef = await Test.createTestingModule({
+      imports: [PgBossModule.forRoot({})],
+      providers: [Forms],
+    })
+      .overrideProvider(PGBOSS_INSTANCE)
+      .useValue(boss)
+      .compile();
+    await moduleRef.init();
+
+    const by = (queue: string, key: string) => calls.filter((c) => c.queue === queue && key in c.options);
+    expect(calls.map((c) => c.queue).sort()).toEqual(['both', 'default-q', 'default-q', 'default-q', 'named']);
+    expect(by('both', 'includeMetadata')).toHaveLength(1);
+    expect(by('default-q', 'includeMetadata')).toHaveLength(1);
+    expect(by('default-q', 'batchSize').some((c) => c.options.batchSize === 5)).toBe(true);
+    await moduleRef.close();
+  });
+});

@@ -404,8 +404,8 @@ A worker is a method on a provider. The module finds these methods when the appl
 | Decorator | On | Purpose |
 | --- | --- | --- |
 | `@Processor(queue?)` | a class | Marks the provider as holding workers. `queue` is the default for its methods. |
-| `@Process(queue?, options?)` | a method | Handles one job at a time. |
-| `@ProcessBatch(queue?, options?)` | a method | Handles up to `batchSize` jobs per call. |
+| `@Process(queue?, options?)` | a method | Handles one job at a time. Also accepts `@Process(options)`. |
+| `@ProcessBatch(queue?, options?)` | a method | Handles up to `batchSize` jobs per call. Also accepts `@ProcessBatch(options)`. |
 
 ```ts
 @Processor('email')
@@ -422,6 +422,9 @@ export class EmailProcessor {
   async sendUrgent(job: Job<SendEmail>) {
     await this.transport.deliver(job.data, { urgent: true });
   }
+
+  @Process({ includeMetadata: true })           // the class's queue, options only
+  async audit(job: JobWithMetadata<SendEmail>) {}
 
   @ProcessBatch('email-digest', { batchSize: 50 })
   async digest(jobs: Job<DigestEntry>[]) {
@@ -946,8 +949,8 @@ Nest calls `process.abort()` when bootstrap fails. Pass `abortOnError: false` to
 | --- | --- |
 | `InjectQueue(name)` | Inject the `JobQueue` for a queue. |
 | `Processor(queue?)` | Mark a provider as holding workers. |
-| `Process(queue?, options?)` | Register a method as a one-job worker. |
-| `ProcessBatch(queue?, options?)` | Register a method as a batch worker. |
+| `Process(queue?, options?)` / `Process(options)` | Register a method as a one-job worker. |
+| `ProcessBatch(queue?, options?)` / `ProcessBatch(options)` | Register a method as a batch worker. |
 | `Schedule(expression, options?)` | Run a `@Process` method on a schedule. |
 
 ### Providers and tokens

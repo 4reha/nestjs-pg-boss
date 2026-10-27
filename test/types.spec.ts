@@ -40,3 +40,18 @@ describe('handler signatures', () => {
     expect(Invalid).toBeDefined();
   });
 });
+
+describe('decorator argument forms', () => {
+  it('type checks every overload', () => {
+    class Forms {
+      @Process() a(_job: Job) {}
+      @Process('q') b(_job: Job) {}
+      @Process({ includeMetadata: true }) c(_job: Job) {}
+      @Process('q', { includeMetadata: true }) d(_job: Job) {}
+      @Process(undefined, { includeMetadata: true }) e(_job: Job) {}
+      // @ts-expect-error batchSize is fixed for @Process
+      @Process({ batchSize: 3 }) f(_job: Job) {}
+    }
+    expect(Forms).toBeDefined();
+  });
+});
