@@ -3,7 +3,8 @@
 ```bash
 npm ci
 npm run typecheck
-npm test            # integration tests run on PGlite, so no database is needed
+npm test            # Jest, with the integration tests on PGlite, so no database is needed
+npm run test:postgres   # the real-Postgres tests through Testcontainers; needs Docker
 npm run build
 npm run check:package
 ```
