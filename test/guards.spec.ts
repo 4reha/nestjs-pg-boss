@@ -1,6 +1,6 @@
 import { Injectable, Module } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, jest } from '@jest/globals';
 import {
   PGBOSS_INSTANCE,
   PgBossModule,
@@ -98,7 +98,7 @@ describe('handler dispatch', () => {
   const job = (id: string): Job => ({ id, name: 'q', data: {} }) as Job;
 
   it('rejects instead of dropping jobs when a single-job handler is handed several', async () => {
-    const seen = vi.fn();
+    const seen = jest.fn();
 
     @Processor('single')
     @Injectable()
@@ -128,7 +128,7 @@ describe('handler dispatch', () => {
   });
 
   it('hands the whole array to a batch handler', async () => {
-    const seen = vi.fn();
+    const seen = jest.fn();
 
     @Processor('many')
     @Injectable()

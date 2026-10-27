@@ -1,6 +1,6 @@
 import { Injectable, Module } from '@nestjs/common';
 import { fromPglite } from 'pg-boss';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from '@jest/globals';
 import {
   InjectQueue,
   JobQueue,

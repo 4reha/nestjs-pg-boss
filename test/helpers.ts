@@ -3,7 +3,7 @@ import { PGlite } from '@electric-sql/pglite';
 import { Module, type INestApplicationContext, type LoggerService } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { fromPglite } from 'pg-boss';
-import { afterAll, afterEach, beforeAll } from 'vitest';
+import { afterAll, afterEach, beforeAll } from '@jest/globals';
 import type { PgBossModuleOptions } from '../src/index.js';
 
 /** Fast polling so tests don't wait out pg-boss's 2 second default. */

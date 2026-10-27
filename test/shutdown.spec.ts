@@ -1,5 +1,5 @@
 import { Injectable, Module, type OnApplicationShutdown } from '@nestjs/common';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from '@jest/globals';
 import { InjectQueue, JobQueue, PgBossModule, Process, Processor, type Job } from '../src/index.js';
 import { fast, useHarness, waitFor } from './helpers.js';
 

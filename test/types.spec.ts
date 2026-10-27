@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from '@jest/globals';
 import { Process, ProcessBatch, Processor, type Job } from '../src/index.js';
 
 /**

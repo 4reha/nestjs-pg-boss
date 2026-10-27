@@ -849,17 +849,22 @@ export const ProcessBatch = noop;
 export const Schedule = noop;
 ```
 
-A test that boots the real `PgBossModule` has to run in Vitest or another runner that handles ESM. Vitest works without any setup.
+A test that boots the real `PgBossModule` has to run in a runner that handles ESM. Vitest does without any setup. Jest can too, in its experimental ESM mode: start it with `node --experimental-vm-modules`, compile with `@swc/jest` (or `ts-jest` on TypeScript 6 or older), and add a resolver for the `.js` suffixes. This package's own tests run that way, so `jest.config.cjs` and `test/jest-resolver.cjs` in the repository are a working example.
 
 ### Real Postgres
 
-Set `PG_TEST_URL` to a throwaway database and run `test/postgres.spec.ts` to cover what PGlite cannot: the real connection pool, `LISTEN/NOTIFY` and transactional workers. CI runs it against a Postgres 17 service container.
+[Testcontainers](https://node.testcontainers.org/modules/postgresql/) starts a throwaway Postgres in Docker, which covers what PGlite cannot: the real connection pool, `LISTEN/NOTIFY` and transactional workers.
 
-```bash
-PG_TEST_URL=postgres://postgres:postgres@localhost:5432/postgres npx vitest run test/postgres.spec.ts
+```ts
+import { PostgreSqlContainer } from '@testcontainers/postgresql';
+
+const container = await new PostgreSqlContainer('postgres:17').start();
+PgBossModule.forRoot({ connectionString: container.getConnectionUri(), schema: 'test_1' });
+// ...
+await container.stop();
 ```
 
-The tests leave one schema per test behind, so use a database you can throw away.
+Docker has to be running. This package's own run is `npm run test:postgres`, and CI does the same in its own job. It is a separate script so that `npm test` never needs Docker.
 
 ## Troubleshooting
 
@@ -974,7 +979,8 @@ Nest calls `process.abort()` when bootstrap fails. Pass `abortOnError: false` to
 ```bash
 npm ci
 npm run typecheck
-npm test              # integration tests run on PGlite, so no database is needed
+npm test              # Jest, with the integration tests on PGlite, so no database is needed
+npm run test:postgres # the real-Postgres tests; needs Docker
 npm run build
 npm run check:package
 ```

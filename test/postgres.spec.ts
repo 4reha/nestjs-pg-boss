@@ -1,7 +1,8 @@
 import 'reflect-metadata';
 import { Injectable, Module, type INestApplicationContext } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { afterEach, describe, expect, it } from 'vitest';
+import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from '@jest/globals';
 import {
   InjectQueue,
   JobQueue,
@@ -17,21 +18,31 @@ import { waitFor } from './helpers.js';
 
 /**
  * These run against a real Postgres, which PGlite cannot stand in for: the connection pool,
- * LISTEN/NOTIFY and transactional workers. They are skipped unless PG_TEST_URL points at a
- * throwaway database, e.g. postgres://postgres:postgres@localhost:5432/postgres
+ * LISTEN/NOTIFY and transactional workers. Testcontainers starts a throwaway Postgres 17 in Docker,
+ * so Docker has to be running. Run them with `npm run test:postgres`.
  */
-const url = process.env.PG_TEST_URL;
+let container: StartedPostgreSqlContainer;
+let url: string;
 
 const apps: INestApplicationContext[] = [];
 let counter = 0;
+
+beforeAll(async () => {
+  container = await new PostgreSqlContainer('postgres:17').start();
+  url = container.getConnectionUri();
+}, 120_000);
+
+afterAll(async () => {
+  await container?.stop();
+});
 
 afterEach(async () => {
   await Promise.all(apps.splice(0).map((app) => app.close()));
 });
 
 function options(overrides: Partial<PgBossModuleOptions> = {}): PgBossModuleOptions {
-  // A fresh schema per test keeps tests apart. They are left behind, so use a disposable database.
-  return { connectionString: url, schema: `nestjs_pg_boss_${process.pid}_${++counter}`, ...overrides };
+  // A fresh schema per test keeps tests apart. The container is discarded afterwards.
+  return { connectionString: url, schema: `nestjs_pg_boss_${++counter}`, ...overrides };
 }
 
 async function boot(...imports: any[]): Promise<INestApplicationContext> {
@@ -42,7 +53,7 @@ async function boot(...imports: any[]): Promise<INestApplicationContext> {
   return app;
 }
 
-describe.skipIf(!url)('against a real Postgres', () => {
+describe('against a real Postgres', () => {
   it('processes a job through the built-in connection pool', async () => {
     const received: string[] = [];
 
