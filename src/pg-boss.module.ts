@@ -52,8 +52,15 @@ export class PgBossModule extends ConfigurableModuleClass {
         { provide: definitionToken, useValue: definition },
         {
           provide: getQueueToken(definition.name),
-          inject: [definitionToken, QueueRegistry, PGBOSS_INSTANCE],
-          useFactory: async (declared: QueueDefinition, registry: QueueRegistry, boss: PgBoss) => {
+          // Optional so a missing forRoot() produces the message below instead of a DI stack trace.
+          inject: [definitionToken, { token: QueueRegistry, optional: true }, { token: PGBOSS_INSTANCE, optional: true }],
+          useFactory: async (declared: QueueDefinition, registry?: QueueRegistry, boss?: PgBoss) => {
+            if (!registry || !boss) {
+              throw new Error(
+                `PgBossModule.registerQueue('${declared.name}') needs PgBossModule.forRoot() or forRootAsync() ` +
+                  'in the application. Import it once, in the root module.',
+              );
+            }
             registry.declare(declared);
             await registry.ensure(declared.name);
             return new JobQueue(declared.name, boss);

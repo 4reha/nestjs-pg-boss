@@ -19,6 +19,7 @@ type ProcessorMethod = (jobs: Job<any> | Job<any>[], tx?: Db) => Promise<unknown
 @Injectable()
 export class PgBossExplorer implements OnApplicationBootstrap {
   private readonly logger = new Logger(PGBOSS_LOGGER_CONTEXT);
+  private readonly warnedQueues = new Set<string>();
 
   constructor(
     @Inject(PGBOSS_INSTANCE) private readonly boss: PgBoss,
@@ -70,6 +71,13 @@ export class PgBossExplorer implements OnApplicationBootstrap {
         throw new Error(`${where} has no queue. Name it in @Process('queue') or in @Processor('queue').`);
       }
 
+      if (!this.registry.isDeclared(queue) && !this.warnedQueues.has(queue)) {
+        this.warnedQueues.add(queue);
+        this.logger.warn(
+          `${where} processes "${queue}", but no registerQueue() declares it. ` +
+            'It is created with pg-boss defaults. If the name is a typo, jobs sent to the right queue will never be picked up.',
+        );
+      }
       await this.registry.ensure(queue);
 
       const method = (instance as Record<string, ProcessorMethod>)[methodName]!.bind(instance);
@@ -87,6 +95,12 @@ export class PgBossExplorer implements OnApplicationBootstrap {
   private createHandler(queue: string, method: ProcessorMethod, batch: boolean) {
     return async (jobs: Job<any>[], tx?: Db): Promise<unknown> => {
       try {
+        // @Process forces batchSize 1. If pg-boss ever returns more, failing loudly beats dropping jobs.
+        if (!batch && jobs.length !== 1) {
+          throw new Error(
+            `Expected one job for "${queue}" but pg-boss returned ${jobs.length}. Use @ProcessBatch to handle several at once.`,
+          );
+        }
         return await method(batch ? jobs : jobs[0]!, tx);
       } catch (error) {
         const ids = jobs.map((job) => job.id).join(', ');
