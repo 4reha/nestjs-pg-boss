@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/4reha/nestjs-pg-boss/compare/v0.1.2...v0.2.0) (2026-10-27)
+
+
+### Features
+
+* let @Process and @ProcessBatch take a queue, options, both or neither ([#12](https://github.com/4reha/nestjs-pg-boss/issues/12)) ([b0119cb](https://github.com/4reha/nestjs-pg-boss/commit/b0119cb45b0dfd8bf654f050095a2d7556b8f287))
+
 ## [0.1.2](https://github.com/4reha/nestjs-pg-boss/compare/v0.1.1...v0.1.2) (2026-10-27)
 
 
