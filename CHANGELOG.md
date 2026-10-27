@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/4reha/nestjs-pg-boss/compare/v0.2.0...v0.3.0) (2026-10-27)
+
+
+### Features
+
+* wrap the rest of the pg-boss API ([#13](https://github.com/4reha/nestjs-pg-boss/issues/13)) ([4bd2ae7](https://github.com/4reha/nestjs-pg-boss/commit/4bd2ae78ab24e59a6cdc13d61fceb5bbc2afd880))
+
 ## [0.2.0](https://github.com/4reha/nestjs-pg-boss/compare/v0.1.2...v0.2.0) (2026-10-27)
 
 
