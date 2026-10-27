@@ -75,6 +75,16 @@ npm install nestjs-pg-boss pg-boss
 
 `pg-boss` is a peer dependency, so you install it yourself and control its version. The package also needs `@nestjs/common`, `@nestjs/core`, `reflect-metadata` and `rxjs`, which every Nest application already has.
 
+### Installing from GitHub
+
+To use an unreleased commit, install straight from the repository. The package builds itself on install (`prepare` runs `tsc`), so the first install takes a few seconds longer.
+
+```bash
+npm install github:4reha/nestjs-pg-boss#<commit-sha>
+```
+
+Put a release tag or a commit SHA after the `#`. Without one you follow `main`. npm 12 refuses git dependencies unless you pass `--allow-git=all` (or set `allow-git=all` in `.npmrc`), and it may warn that the `prepare` script is not on your `allowScripts` list. The build still runs. Tags before the one that added `prepare` have no `dist` and cannot be installed this way.
+
 For local development, this starts a database:
 
 ```bash
