@@ -1,9 +1,6 @@
-import 'reflect-metadata';
-import { PGlite } from '@electric-sql/pglite';
-import { Injectable, Module, type INestApplicationContext } from '@nestjs/common';
-import { NestFactory } from '@nestjs/core';
+import { Injectable, Module } from '@nestjs/common';
 import { fromPglite } from 'pg-boss';
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
   InjectQueue,
   JobQueue,
@@ -14,50 +11,12 @@ import {
   Processor,
   Schedule,
   type Job,
-  type PgBossModuleOptions,
 } from '../src/index.js';
+import { fast, useHarness, waitFor } from './helpers.js';
 
-const fast = { pollingIntervalSeconds: 0.5 };
-
-let pglite: PGlite;
-let schemaCounter = 0;
-const apps: INestApplicationContext[] = [];
-
-beforeAll(async () => {
-  pglite = new PGlite();
-});
-
-afterAll(async () => {
-  await pglite.close();
-});
-
-afterEach(async () => {
-  await Promise.all(apps.splice(0).map((app) => app.close()));
-});
-
-/** Each test gets its own pg-boss schema so tests never see each other's jobs. */
-function options(overrides: Partial<PgBossModuleOptions> = {}): PgBossModuleOptions {
-  return { db: fromPglite(pglite), schema: `boss_${++schemaCounter}`, ...overrides };
-}
-
-async function boot(...imports: any[]): Promise<INestApplicationContext> {
-  @Module({ imports })
-  class AppModule {}
-  // abortOnError: false makes a failed bootstrap reject instead of calling process.abort().
-  const app = await NestFactory.createApplicationContext(AppModule, { logger: false, abortOnError: false });
-  apps.push(app);
-  return app;
-}
-
-async function waitFor<T>(read: () => T | undefined | Promise<T | undefined>, timeoutMs = 10_000): Promise<T> {
-  const deadline = Date.now() + timeoutMs;
-  for (;;) {
-    const value = await read();
-    if (value !== undefined) return value;
-    if (Date.now() > deadline) throw new Error('waitFor timed out');
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
-}
+const harness = useHarness();
+const options = harness.options.bind(harness);
+const boot = (...imports: any[]) => harness.boot(imports);
 
 describe('PgBossModule', () => {
   it('delivers an enqueued job to the @Process method with typed data', async () => {
@@ -223,13 +182,13 @@ describe('PgBossModule', () => {
 
     // The caller's own transaction (here PGlite's, in an app it would be Knex/Prisma/...) wrapped by an adapter.
     await expect(
-      pglite.transaction(async (tx) => {
+      harness.pglite.transaction(async (tx) => {
         await queue.send({ rolledBack: true }, { db: fromPglite(tx) });
         throw new Error('abort');
       }),
     ).rejects.toThrow('abort');
 
-    await pglite.transaction(async (tx) => {
+    await harness.pglite.transaction(async (tx) => {
       await queue.send({ committed: true }, { db: fromPglite(tx) });
     });
 
@@ -251,7 +210,7 @@ describe('PgBossModule', () => {
     const opts = options();
     const first = await boot(PgBossModule.forRoot(opts), PgBossModule.registerQueue({ name: 'tuned', retryLimit: 1 }));
     await first.close();
-    apps.pop();
+    harness.release(first);
 
     const second = await boot(PgBossModule.forRoot(opts), PgBossModule.registerQueue({ name: 'tuned', retryLimit: 7 }));
     const info = await second.get<JobQueue>('PgBossQueue:tuned').getInfo();
