@@ -1,6 +1,6 @@
 {
   "name": "nestjs-pg-boss",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "NestJS module for pg-boss: declarative queues, decorator-based workers and schedules, and transactional enqueueing.",
   "keywords": [
     "nestjs",
