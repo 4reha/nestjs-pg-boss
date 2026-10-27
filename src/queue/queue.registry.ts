@@ -28,6 +28,11 @@ export class QueueRegistry {
     this.ready.delete(definition.name);
   }
 
+  /** True when `registerQueue()` declared this queue, as opposed to it being created implicitly. */
+  isDeclared(name: string): boolean {
+    return this.definitions.has(name);
+  }
+
   /** Resolves once the queue, and its dead letter queue if any, exist and match the declaration. */
   ensure(name: string): Promise<void> {
     let pending = this.ready.get(name);
@@ -61,6 +66,11 @@ export class QueueRegistry {
   }
 }
 
+/** Same options in a different key order are the same definition. */
 function isSameDefinition(a: QueueDefinition, b: QueueDefinition): boolean {
-  return JSON.stringify(a) === JSON.stringify(b);
+  return canonical(a) === canonical(b);
+}
+
+function canonical(value: object): string {
+  return JSON.stringify(Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b))));
 }
