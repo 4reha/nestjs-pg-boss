@@ -41,6 +41,7 @@
     "clean": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\"",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "prepare": "npm run build",
     "prepublishOnly": "npm run clean && npm run typecheck && npm test && npm run build",
     "check:package": "publint && attw --pack . --profile esm-only",
     "test:postgres": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config jest.postgres.config.cjs"
