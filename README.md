@@ -47,6 +47,9 @@ export class EmailProcessor {
 - [Queues](#queues)
 - [Sending jobs](#sending-jobs)
 - [Processing jobs](#processing-jobs)
+- [Flows](#flows)
+- [Pub/sub](#pubsub)
+- [Fetching jobs yourself](#fetching-jobs-yourself)
 - [Scheduling](#scheduling)
 - [Transactions](#transactions)
 - [Lifecycle and shutdown](#lifecycle-and-shutdown)
@@ -392,6 +395,14 @@ const jobs = await this.queue.findJobs({ data: { invoiceId: 'inv_1' } });
 | `retry(id)` | Puts failed jobs back in the queue. |
 | `deleteJob(id)` | Deletes jobs. |
 | `getInfo()` | The queue's definition plus live counts: queued, active, deferred and others. |
+| `update(data, options)`, `upsert(data, options)` | Edit a job in place, targeted by `id` or `singletonKey` in the options. `upsert` inserts one new job when nothing matches. |
+| `resume(id)` | Puts cancelled jobs back in the queue. |
+| `previewRedrive(options)` | Counts what `redrive` would move without moving it. |
+| `getQueueStats(options)`, `getBlockedKeys(options)` | Queue statistics, and the singleton keys that currently block new sends (`getBlockedKeys` only works on `key_strict_fifo` queues). |
+| `getSchedule(key)` | One schedule of this queue. |
+| `deleteQueuedJobs()`, `deleteStoredJobs()`, `deleteAllJobs()` | Delete waiting jobs, finished jobs, or all of them. Each returns how many. |
+| `supervise(options)` | Runs maintenance for this queue now. |
+| `updateQueue(options)`, `deleteQueue()` | Change or remove the queue itself. |
 | `redrive(options)` | On a dead letter queue, moves its jobs back to the queues they failed in. Filter with `sourceName`, `ids`, `data` or `createdBefore`. Returns how many moved. |
 | `schedule`, `unschedule`, `getSchedules` | See [Scheduling](#scheduling). |
 
@@ -483,6 +494,55 @@ The module fails at boot for mistakes it can detect, and each message names the 
 - A `@Process` method with no queue anywhere.
 - A `@Schedule` on a method that has no `@Process`.
 - A queue declared twice with different options.
+
+## Flows
+
+A flow is a set of jobs with dependencies between them, created in one transaction. A job that lists `dependsOn` stays blocked until every parent has completed.
+
+```ts
+const ids = await this.pgBoss.flow([
+  { ref: 'extract-a', name: 'extract', data: { file: '1.csv' } },
+  { ref: 'extract-b', name: 'extract', data: { file: '2.csv' } },
+  { ref: 'load', name: 'load', data: { output: 'report.csv' }, dependsOn: ['extract-a', 'extract-b'] },
+]);
+
+ids.load; // the id of the load job
+```
+
+Here `this.pgBoss` is the injected `PgBossService`. A flow needs at least two jobs. Each `ref` is a name you choose for the job within this call, and `flow` returns a map from each ref to the created job id. `flow` creates any queue it names that does not exist yet, then hands the jobs to pg-boss. It takes the same `{ db }` option as the other write methods.
+
+A background pass releases blocked jobs once their parents are done. `flowIntervalSeconds` in the module options sets how often it runs, and `resolveFlow()` runs a pass immediately, which is handy in tests. If a parent fails or is cancelled, its dependents stay blocked until you cancel or fail them. `redrive` on a dead letter queue does not resume a flow.
+
+`JobQueue.getDependencies(id)` lists the parents of a job, and `getDependents(id)` lists its children.
+
+## Pub/sub
+
+`subscribe` routes an event name to a queue. `publish` then sends one job to every queue subscribed to that event.
+
+```ts
+await this.auditQueue.subscribe('invoice.paid');
+await this.pgBoss.publish('invoice.paid', { invoiceId: 'inv_1' });
+```
+
+`unsubscribe(event)` removes the route.
+
+## Fetching jobs yourself
+
+`@Process` suits most work. When a consumer has to decide for itself when to take jobs, `JobQueue` exposes the pull API:
+
+```ts
+const jobs = await this.queue.fetch({ batchSize: 10 });
+for (const job of jobs) {
+  try {
+    await handle(job.data);
+    await this.queue.complete(job.id, { handled: true });
+  } catch (error) {
+    await this.queue.fail(job.id, { message: String(error) });
+  }
+}
+```
+
+`fetch({ includeMetadata: true })` returns `JobWithMetadata`. `touch(id)` refreshes the heartbeat of a job you are still working on, and `offWork()` stops the workers this process registered on the queue. `id` can also be the `{ id, retryCount }` of a fetched job, which limits the call to that attempt.
 
 ## Scheduling
 
@@ -683,7 +743,7 @@ The check tells you the database is reachable. It does not tell you whether work
 
 ### The underlying instance
 
-`PgBossService.boss` is the raw `PgBoss` object, for anything the module does not wrap, such as `getQueueStats` or `previewSchedule`. The same instance is available under the `PGBOSS_INSTANCE` token. Do not call `start()` or `stop()` on it yourself. The module owns those.
+`PgBossService.boss` is the raw `PgBoss` object, for anything you want to call directly. Most of pg-boss's API is also wrapped, on `JobQueue` for one queue and on `PgBossService` for the rest: `flow`, `resolveFlow`, `publish`, `getQueues`, `getInstances`, `getSchedules`, `previewSchedule`, `getWipData`, `getBamStatus`, `getBamEntries`, `isInstalled`, `schemaVersion`, `detectSchemaDrift`, `getReindexCommands`, `supervise`, `deleteAllJobs`, the `isMaintaining`-style status checks, `on` and `off`, and the test spies. The same instance is available under the `PGBOSS_INSTANCE` token. Do not call `start()` or `stop()` on it yourself. The module owns those.
 
 ## Deployment
 
@@ -955,7 +1015,7 @@ Nest calls `process.abort()` when bootstrap fails. Pass `abortOnError: false` to
 | Export | Purpose |
 | --- | --- |
 | `JobQueue<T>` | The typed handle on one queue, see [Sending jobs](#sending-jobs). |
-| `PgBossService` | `boss` (the raw instance), `isHealthy()`, and the shutdown hooks. |
+| `PgBossService` | `boss` (the raw instance), `isHealthy()`, the shutdown hooks, and the cross-queue parts of pg-boss's API (flows, pub/sub, inspection, maintenance). |
 | `PGBOSS_INSTANCE` | Injection token of the started `PgBoss` instance. |
 | `QueueRegistry` | Creates and tracks declared queues. Rarely needed directly. |
 | `getQueueToken(name)` | The injection token for a queue, for providing fakes in tests. |
@@ -968,11 +1028,16 @@ Nest calls `process.abort()` when bootstrap fails. Pass `abortOnError: false` to
 | `QueueDefinition` | A queue name plus its options. |
 | `ProcessOptions`, `ProcessBatchOptions` | Options of the worker decorators. |
 | `ScheduleDecoratorOptions` | Options of `@Schedule`. |
-| `Job`, `JobWithMetadata`, `SendOptions`, `Db` | Types re-exported from pg-boss. |
+| `JobRef` | An id, several ids, or a fetched job's `{ id, retryCount }`. |
+| `Job`, `JobWithMetadata`, `SendOptions`, `Db`, `FlowJob` and the rest | Every type pg-boss exports is re-exported. pg-boss's `Schedule` is `JobSchedule` here, because `Schedule` is the decorator. |
 
 ### Transaction adapters
 
-`fromKnex`, `fromKysely`, `fromDrizzle` and `fromPrisma` are re-exported from pg-boss. See [Transactions](#transactions).
+`fromKnex`, `fromKysely`, `fromDrizzle`, `fromPrisma`, `fromPglite` and `fromBunSql` are re-exported from pg-boss. See [Transactions](#transactions).
+
+### Constants and helpers
+
+The rest of pg-boss's runtime exports are re-exported too: `scheduleKinds`, `scheduleMissedPolicies`, `previewScheduleMaxCount`, `addBins`, `percentile`, `getConstructionPlans`, `getMigrationPlans`, `getIndexBloatPlans`, `getRollbackPlans`, `getUninstallPlans`, `systemClock`, `TestClock`, `enableClockOverride`, `disableClockOverride` and `CLOCK_OVERRIDE_SETTING`. Three generic names are renamed: pg-boss's `states` is `jobStates`, `policies` is `queuePolicies` and `events` is `pgBossEvents`.
 
 ## Contributing
 
