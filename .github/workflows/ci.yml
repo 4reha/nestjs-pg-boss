@@ -61,25 +61,12 @@ jobs:
       - run: npm test
 
   # The matrix above runs on PGlite. This job covers what PGlite cannot: the real connection pool,
-  # LISTEN/NOTIFY and transactional workers.
+  # LISTEN/NOTIFY and transactional workers. Testcontainers starts Postgres 17 itself, using the
+  # Docker that ubuntu runners already have.
   postgres:
     name: Integration (Postgres 17)
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    services:
-      postgres:
-        image: postgres:17
-        env:
-          POSTGRES_PASSWORD: postgres
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-    env:
-      PG_TEST_URL: postgres://postgres:postgres@localhost:5432/postgres
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -89,7 +76,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npx vitest run test/postgres.spec.ts
+      - run: npm run test:postgres
 
   # One stable name to require in branch protection, whatever the matrix looks like.
   ci:
