@@ -32,12 +32,18 @@ export class JobQueue<TData extends object = object> {
     return this.boss.sendAfter(this.name, data, options, after as Date);
   }
 
-  /** At most one job per `seconds` window (per `key`), the first one wins. */
+  /**
+   * At most one job per `seconds` slot (per `key`). A second send in the same slot is dropped and
+   * returns `null`.
+   */
   sendThrottled(data: TData, seconds: number, key?: string, options: SendOptions | null = null): Promise<string | null> {
     return this.boss.sendThrottled(this.name, data, options, seconds, key);
   }
 
-  /** At most one job per `seconds` window (per `key`), the last one wins. */
+  /**
+   * Like `sendThrottled`, except a send that collides with a job in the current slot is moved to the
+   * next slot instead of being dropped.
+   */
   sendDebounced(data: TData, seconds: number, key?: string, options: SendOptions | null = null): Promise<string | null> {
     return this.boss.sendDebounced(this.name, data, options, seconds, key);
   }
