@@ -1,14 +1,33 @@
 import type {
   CommandResponse,
+  CompleteOptions,
   ConnectionOptions,
+  DependencyRef,
+  FetchOptions,
+  Job,
+  JobAttempt,
   JobInsert,
   JobWithMetadata,
+  ListOptions,
+  OffWorkOptions,
   PgBoss,
   QueueResult,
+  QueueStats,
+  QueueStatsOptions,
+  RedrivePreview,
+  RedrivePreviewOptions,
   Schedule,
   ScheduleOptions,
   SendOptions,
+  SuperviseOptions,
+  UpdateOptions,
+  UpdateQueueOptions,
+  UpdateResponse,
+  UpsertResponse,
 } from 'pg-boss';
+
+/** A job id, several ids, or the `{ id, retryCount }` of a fetched job to settle one specific attempt. */
+export type JobRef = string | string[] | JobAttempt | JobAttempt[];
 
 /**
  * A handle on one queue, typed by the payload it carries. Obtain it with `@InjectQueue('name')`.
@@ -70,7 +89,7 @@ export class JobQueue<TData extends object = object> {
     return this.boss.findJobs<TData>(this.name, options);
   }
 
-  cancel(id: string | string[], options?: ConnectionOptions): Promise<CommandResponse> {
+  cancel(id: JobRef, options?: ConnectionOptions): Promise<CommandResponse> {
     return this.boss.cancel(this.name, id, options);
   }
 
@@ -78,7 +97,7 @@ export class JobQueue<TData extends object = object> {
     return this.boss.retry(this.name, id, options);
   }
 
-  deleteJob(id: string | string[], options?: ConnectionOptions): Promise<CommandResponse> {
+  deleteJob(id: JobRef, options?: ConnectionOptions): Promise<CommandResponse> {
     return this.boss.deleteJob(this.name, id, options);
   }
 
@@ -93,5 +112,128 @@ export class JobQueue<TData extends object = object> {
   /** Queue definition plus live counts (queued, active, deferred, ...). */
   getInfo(): Promise<QueueResult | null> {
     return this.boss.getQueue(this.name);
+  }
+
+  // Manual consumption. Use these when a `@Process` worker is the wrong shape, for example a
+  // pull-based consumer that decides for itself when to take work.
+
+  /** Take up to `batchSize` jobs off the queue. Settle each one with `complete` or `fail`. */
+  fetch(options: FetchOptions & { includeMetadata: true }): Promise<JobWithMetadata<TData>[]>;
+  fetch(options?: FetchOptions): Promise<Job<TData>[]>;
+  fetch(options?: FetchOptions): Promise<Job<TData>[]> {
+    return this.boss.fetch<TData>(this.name, options);
+  }
+
+  /** Mark fetched jobs as done. `data` is stored as the job's output. */
+  complete(id: JobRef, data?: object | null, options?: CompleteOptions): Promise<CommandResponse> {
+    return this.boss.complete(this.name, id, data, options);
+  }
+
+  /** Mark fetched jobs as failed. pg-boss retries them according to the queue's retry settings. */
+  fail(id: JobRef, data?: object | null, options?: ConnectionOptions): Promise<CommandResponse> {
+    return this.boss.fail(this.name, id, data, options);
+  }
+
+  /** Refresh the heartbeat of jobs a long-running consumer still holds, so they are not treated as stalled. */
+  touch(id: JobRef, options?: ConnectionOptions): Promise<CommandResponse> {
+    return this.boss.touch(this.name, id, options);
+  }
+
+  /** Stop the workers registered on this queue by this process. */
+  offWork(options?: OffWorkOptions): Promise<void> {
+    return this.boss.offWork(this.name, options);
+  }
+
+  // Changing and inspecting jobs.
+
+  /** Edit a job in place. Pass the target as `id` or `singletonKey` in `options`; `data: null` clears the payload. */
+  update(data: TData | null | undefined, options?: UpdateOptions): Promise<UpdateResponse> {
+    return this.boss.update(this.name, data, options);
+  }
+
+  /** Like `update`, except that it inserts one new job when nothing matches. */
+  upsert(data: TData | null | undefined, options?: UpdateOptions): Promise<UpsertResponse> {
+    return this.boss.upsert(this.name, data, options);
+  }
+
+  /** Put cancelled jobs back in the queue. */
+  resume(id: string | string[], options?: ConnectionOptions): Promise<CommandResponse> {
+    return this.boss.resume(this.name, id, options);
+  }
+
+  /** Counts what `redrive` would move, without moving anything. */
+  previewRedrive(options?: RedrivePreviewOptions): Promise<RedrivePreview> {
+    return this.boss.previewRedrive(this.name, options);
+  }
+
+  /** Singleton keys currently blocking new sends. Only available on `key_strict_fifo` queues; pg-boss throws on others. */
+  getBlockedKeys(options?: ListOptions): Promise<string[]> {
+    return this.boss.getBlockedKeys(this.name, options);
+  }
+
+  getQueueStats(options?: QueueStatsOptions): Promise<QueueStats[]> {
+    return this.boss.getQueueStats(this.name, options);
+  }
+
+  // Cleanup. These delete data, so they are easy to regret in production.
+
+  /** Delete jobs that have not run yet. Returns how many. */
+  deleteQueuedJobs(): Promise<number> {
+    return this.boss.deleteQueuedJobs(this.name);
+  }
+
+  /** Delete jobs that have finished (completed, failed or cancelled). Returns how many. */
+  deleteStoredJobs(): Promise<number> {
+    return this.boss.deleteStoredJobs(this.name);
+  }
+
+  /** Delete every job in the queue. Returns how many. */
+  deleteAllJobs(): Promise<number | null> {
+    return this.boss.deleteAllJobs(this.name);
+  }
+
+  /** Run maintenance (expiring, archiving, deleting) for this queue now instead of waiting for the next pass. */
+  supervise(options?: SuperviseOptions): Promise<void> {
+    return this.boss.supervise(this.name, options);
+  }
+
+  // The queue itself.
+
+  /**
+   * Change the queue's options in the database. `registerQueue()` already reconciles the declared
+   * options on boot, so use this for changes made at runtime.
+   */
+  updateQueue(options: UpdateQueueOptions): Promise<void> {
+    return this.boss.updateQueue(this.name, options);
+  }
+
+  /** Delete the queue and its jobs. The handle is unusable afterwards. */
+  deleteQueue(): Promise<void> {
+    return this.boss.deleteQueue(this.name);
+  }
+
+  // Schedules, flows and pub/sub.
+
+  getSchedule(key?: string): Promise<Schedule | null> {
+    return this.boss.getSchedule(this.name, key);
+  }
+
+  /** Jobs this job is waiting on in a flow. */
+  getDependencies(id: string, options?: ConnectionOptions & ListOptions<DependencyRef>): Promise<DependencyRef[]> {
+    return this.boss.getDependencies(this.name, id, options);
+  }
+
+  /** Jobs that are waiting on this job in a flow. */
+  getDependents(id: string, options?: ConnectionOptions & ListOptions<DependencyRef>): Promise<DependencyRef[]> {
+    return this.boss.getDependents(this.name, id, options);
+  }
+
+  /** Deliver every `PgBossService.publish(event)` to this queue. */
+  subscribe(event: string): Promise<void> {
+    return this.boss.subscribe(event, this.name);
+  }
+
+  unsubscribe(event: string): Promise<void> {
+    return this.boss.unsubscribe(event, this.name);
   }
 }
