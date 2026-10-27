@@ -1,5 +1,21 @@
 import { DiscoveryService } from '@nestjs/core';
-import type { ScheduleOptions, WorkOptions } from 'pg-boss';
+import type { Db, Job, ScheduleOptions, WorkOptions } from 'pg-boss';
+
+/**
+ * What a `@Process` method may look like. `tx` is only passed when the worker is registered with
+ * `transactional: true`; declare it as the second parameter to receive it.
+ */
+export type JobHandler = (job: Job<any>, tx: Db) => unknown;
+
+/** What a `@ProcessBatch` method may look like. */
+export type BatchJobHandler = (jobs: Job<any>[], tx: Db) => unknown;
+
+/** A method decorator that only accepts methods matching `Handler`, so a wrong signature fails to compile. */
+export type MethodDecoratorFor<Handler> = <T extends Handler>(
+  target: object,
+  key: string | symbol,
+  descriptor: TypedPropertyDescriptor<T>,
+) => void;
 
 /**
  * `perJobResults` changes the handler contract (it must return a result per job), so it is not
@@ -47,12 +63,12 @@ export const Processor = (queue?: string) => ProcessorMarker({ queue });
  * transaction as a second argument). Throwing fails the job and lets pg-boss retry it according
  * to the queue's retry settings.
  */
-export const Process = (queue?: string, options: ProcessOptions = {}) =>
-  ProcessMarker({ queue, options: { ...options, batchSize: 1 }, batch: false });
+export const Process = (queue?: string, options: ProcessOptions = {}): MethodDecoratorFor<JobHandler> =>
+  ProcessMarker({ queue, options: { ...options, batchSize: 1 }, batch: false }) as MethodDecoratorFor<JobHandler>;
 
 /** Handles up to `batchSize` jobs per call. The method receives an array of jobs. */
-export const ProcessBatch = (queue?: string, options: ProcessBatchOptions = {}) =>
-  ProcessMarker({ queue, options, batch: true });
+export const ProcessBatch = (queue?: string, options: ProcessBatchOptions = {}): MethodDecoratorFor<BatchJobHandler> =>
+  ProcessMarker({ queue, options, batch: true }) as MethodDecoratorFor<BatchJobHandler>;
 
 /**
  * Runs the decorated `@Process` method on a cron expression or RFC 5545 recurrence rule.
