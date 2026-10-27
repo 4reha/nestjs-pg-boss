@@ -58,17 +58,45 @@ export const ScheduleMarker = DiscoveryService.createDecorator<ScheduleMetadata>
  */
 export const Processor = (queue?: string) => ProcessorMarker({ queue });
 
+/** Accepts `()`, `('queue')`, `({ ...options })` and `('queue', { ...options })`. */
+function splitArgs<O extends object>(first?: string | O, second?: O): { queue?: string; options: O } {
+  if (typeof first === 'string') return { queue: first, options: second ?? ({} as O) };
+  return { queue: undefined, options: first ?? second ?? ({} as O) };
+}
+
 /**
  * Handles one job at a time. The method receives the job (and, with `transactional: true`, the
  * transaction as a second argument). Throwing fails the job and lets pg-boss retry it according
  * to the queue's retry settings.
+ *
+ * ```ts
+ * @Process()                                  // queue from @Processor
+ * @Process('email')                           // explicit queue
+ * @Process({ includeMetadata: true })         // options only
+ * @Process('email', { localConcurrency: 4 })  // both
+ * ```
  */
-export const Process = (queue?: string, options: ProcessOptions = {}): MethodDecoratorFor<JobHandler> =>
-  ProcessMarker({ queue, options: { ...options, batchSize: 1 }, batch: false }) as MethodDecoratorFor<JobHandler>;
+export function Process(): MethodDecoratorFor<JobHandler>;
+export function Process(queue: string): MethodDecoratorFor<JobHandler>;
+export function Process(options: ProcessOptions): MethodDecoratorFor<JobHandler>;
+export function Process(queue: string | undefined, options?: ProcessOptions): MethodDecoratorFor<JobHandler>;
+export function Process(first?: string | ProcessOptions, second?: ProcessOptions): MethodDecoratorFor<JobHandler> {
+  const { queue, options } = splitArgs(first, second);
+  return ProcessMarker({ queue, options: { ...options, batchSize: 1 }, batch: false }) as MethodDecoratorFor<JobHandler>;
+}
 
-/** Handles up to `batchSize` jobs per call. The method receives an array of jobs. */
-export const ProcessBatch = (queue?: string, options: ProcessBatchOptions = {}): MethodDecoratorFor<BatchJobHandler> =>
-  ProcessMarker({ queue, options, batch: true }) as MethodDecoratorFor<BatchJobHandler>;
+/**
+ * Handles up to `batchSize` jobs per call. The method receives an array of jobs. Takes the same
+ * argument forms as `@Process`.
+ */
+export function ProcessBatch(): MethodDecoratorFor<BatchJobHandler>;
+export function ProcessBatch(queue: string): MethodDecoratorFor<BatchJobHandler>;
+export function ProcessBatch(options: ProcessBatchOptions): MethodDecoratorFor<BatchJobHandler>;
+export function ProcessBatch(queue: string | undefined, options?: ProcessBatchOptions): MethodDecoratorFor<BatchJobHandler>;
+export function ProcessBatch(first?: string | ProcessBatchOptions, second?: ProcessBatchOptions): MethodDecoratorFor<BatchJobHandler> {
+  const { queue, options } = splitArgs(first, second);
+  return ProcessMarker({ queue, options, batch: true }) as MethodDecoratorFor<BatchJobHandler>;
+}
 
 /**
  * Runs the decorated `@Process` method on a cron expression or RFC 5545 recurrence rule.
