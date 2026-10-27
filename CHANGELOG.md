@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2](https://github.com/4reha/nestjs-pg-boss/compare/v0.1.1...v0.1.2) (2026-10-27)
+
+
+### Bug fixes
+
+* harden queue registration and handler dispatch ([#3](https://github.com/4reha/nestjs-pg-boss/issues/3)) ([4d3e25d](https://github.com/4reha/nestjs-pg-boss/commit/4d3e25d914d365a39926b4cbea78d16f857f46ae))
+
 ## [0.1.1](https://github.com/4reha/nestjs-pg-boss/compare/v0.1.0...v0.1.1) (2026-10-27)
 
 
