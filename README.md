@@ -2,6 +2,10 @@
 
 [![npm](https://img.shields.io/npm/v/nestjs-pg-boss)](https://www.npmjs.com/package/nestjs-pg-boss)
 [![CI](https://github.com/4reha/nestjs-pg-boss/actions/workflows/ci.yml/badge.svg)](https://github.com/4reha/nestjs-pg-boss/actions/workflows/ci.yml)
+[![downloads](https://img.shields.io/npm/dm/nestjs-pg-boss)](https://www.npmjs.com/package/nestjs-pg-boss)
+[![types](https://img.shields.io/npm/types/nestjs-pg-boss)](https://www.npmjs.com/package/nestjs-pg-boss)
+[![node](https://img.shields.io/node/v/nestjs-pg-boss)](https://nodejs.org)
+[![license](https://img.shields.io/npm/l/nestjs-pg-boss)](LICENSE)
 
 A NestJS module for [pg-boss](https://github.com/timgit/pg-boss), a job queue that keeps its jobs in PostgreSQL. You declare queues in your modules, write workers as decorated methods on ordinary providers, and the module starts and stops pg-boss together with your application.
 
@@ -37,6 +41,21 @@ export class EmailProcessor {
   }
 }
 ```
+
+Install it with `npm install nestjs-pg-boss pg-boss`, or run the [example app](examples/orders-api) to see it work in about two minutes.
+
+## Why use it
+
+- **No broker to run.** Jobs are rows in the PostgreSQL database you already have.
+- **Jobs that match your data.** Pass your transaction to `send` and the job commits or rolls back together with your own writes, so you do not need an outbox table. See [Transactions](#transactions).
+- **Shaped like Nest.** Queues are declared in the module that owns them, workers are decorated methods on ordinary providers, and the module starts pg-boss and drains it on shutdown.
+- **Typed.** `JobQueue<T>` types the payload, and `@Process` rejects a handler with the wrong signature at compile time.
+- **All of pg-boss.** Retries, dead letter queues, throttling, cron schedules, flows and pub/sub are wrapped, so you rarely need the raw instance.
+- **Nest 10, 11 and 12** on Node 22.12 or newer.
+
+### When something else fits better
+
+If you already run Redis and want BullMQ's tooling, such as Bull Board, `@nestjs/bullmq` is a good fit. A Postgres queue also puts its load on your database, so a very high job rate may call for a separate database or a dedicated broker.
 
 ## Contents
 
@@ -637,7 +656,7 @@ await this.knex.transaction(async (trx) => {
 
 If anything in the callback throws, Knex rolls back and the job disappears with the order. A worker cannot see the job before the transaction commits. Without `{ db }`, `send` uses its own connection and commits at once, even if your transaction later rolls back.
 
-The adapters come from pg-boss, and the package re-exports four of them:
+The adapters come from pg-boss, and the package re-exports them:
 
 | Your library | Adapter |
 | --- | --- |
@@ -645,6 +664,8 @@ The adapters come from pg-boss, and the package re-exports four of them:
 | Kysely | `fromKysely(trx)` |
 | Drizzle | `fromDrizzle(tx)` |
 | Prisma | `fromPrisma(tx)` |
+| PGlite | `fromPglite(db)` |
+| Bun SQL | `fromBunSql(sql)` |
 
 ```ts
 await this.prisma.$transaction(async (tx) => {
@@ -653,7 +674,7 @@ await this.prisma.$transaction(async (tx) => {
 });
 ```
 
-pg-boss also provides `fromPglite` and `fromBunSql`, which you import from `pg-boss`. This package's tests exercise the PGlite adapter. The Knex, Kysely, Drizzle and Prisma adapters are pg-boss's code and are not covered by this package's tests, so check them against your own setup.
+This package's tests exercise the PGlite adapter. The other adapters are pg-boss's code and are not covered by this package's tests, so check them against your own setup. Any object with an `executeSql(text, values)` method also works as `db`, which is how the [example app](examples/orders-api) uses a plain `pg` client.
 
 Every write on `JobQueue` accepts `db`: `send`, `sendAfter`, `sendThrottled`, `sendDebounced`, `insert`, `schedule`, `unschedule`, `cancel`, `retry` and `deleteJob`.
 
