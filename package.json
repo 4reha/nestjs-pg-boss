@@ -4,11 +4,18 @@
   "description": "NestJS module for pg-boss: declarative queues, decorator-based workers and schedules, and transactional enqueueing.",
   "keywords": [
     "nestjs",
+    "nestjs-module",
     "pg-boss",
     "postgres",
     "queue",
+    "job-queue",
+    "task-queue",
     "jobs",
-    "background-jobs"
+    "background-jobs",
+    "cron",
+    "scheduler",
+    "workflow",
+    "typescript"
   ],
   "license": "MIT",
   "author": "AbderraHman El Haddad Asofi",
