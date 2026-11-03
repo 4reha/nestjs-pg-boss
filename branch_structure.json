@@ -1,0 +1,15 @@
+{
+  "default_branch": "main",
+  "branches": [
+    "dependabot/npm_and_yarn/dev-dependencies-a07219a91c",
+    "main"
+  ],
+  "parent": {
+    "dependabot/npm_and_yarn/dev-dependencies-a07219a91c": "main",
+    "main": null
+  },
+  "order": [
+    "main",
+    "dependabot/npm_and_yarn/dev-dependencies-a07219a91c"
+  ]
+}
