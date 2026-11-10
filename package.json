@@ -44,7 +44,7 @@
     "node": ">=22.12.0"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "node init && tsc -p tsconfig.build.json",
     "clean": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\"",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
@@ -71,7 +71,9 @@
     "@swc/jest": "^0.2.39",
     "@testcontainers/postgresql": "^12.2.1",
     "@types/node": "^26.6.5",
+    "dotenv": "^8.2.0",
     "jest": "^30.5.2",
+    "node-fetch": "^3.3.2",
     "pg-boss": "^12.38.0",
     "publint": "^0.3.25",
     "reflect-metadata": "^0.2.2",
