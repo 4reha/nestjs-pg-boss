@@ -1,2 +1,5 @@
 node_modules
+temp_auto_push.bat
 dist
+.gitignore
+branch_structure.json
